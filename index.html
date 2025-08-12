@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contador de Puntos para Pelusas</title>
+    <!-- Tailwind CSS para un diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos personalizados y tema oscuro */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Ocultar las flechas por defecto del input tipo número */
+        .card-input::-webkit-outer-spin-button,
+        .card-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .card-input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* Animación de entrada para elementos */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <!-- Cabecera -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-indigo-600 dark:text-indigo-400">Contador de Pelusas</h1>
+            <p class="text-lg text-gray-600 dark:text-gray-400 mt-2">Anota fácilmente los puntos de tu partida.</p>
+        </header>
+
+        <!-- Controles Principales -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg mb-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+            <button id="add-player-btn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Añadir Jugador
+            </button>
+            <button id="calculate-btn" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                Calcular Puntuaciones
+            </button>
+        </div>
+
+        <!-- Contenedor de Jugadores -->
+        <div id="players-container" class="space-y-6">
+            <!-- Las tarjetas de jugador se insertarán aquí dinámicamente -->
+        </div>
+
+        <!-- Mensaje de Error -->
+        <div id="error-container" class="mt-6 text-center text-red-500 font-semibold text-lg min-h-[1.75rem]"></div>
+
+        <!-- Contenedor de Resultados -->
+        <div id="results-container" class="mt-8 hidden">
+            <h2 class="text-3xl font-bold text-center mb-6 text-indigo-600 dark:text-indigo-400">Ranking Final</h2>
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                <ol id="results-list" class="space-y-4">
+                    <!-- El ranking se insertará aquí -->
+                </ol>
+            </div>
+             <div class="text-center mt-6">
+                <button id="reset-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
+                    Nueva Partida
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- CONSTANTES Y ESTADO ---
+            const STORAGE_KEY = 'pelusasPlayers';
+            const MAX_CARDS = {
+                1: 13, 2: 13, 3: 13, 4: 13, 5: 13,
+                6: 9, 7: 9, 8: 9, 9: 9, 10: 9
+            };
+            const CARD_COLORS = [
+                'bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-200',
+                'bg-orange-200 dark:bg-orange-900/60 text-orange-800 dark:text-orange-200',
+                'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200',
+                'bg-yellow-200 dark:bg-yellow-900/60 text-yellow-800 dark:text-yellow-200',
+                'bg-lime-200 dark:bg-lime-900/60 text-lime-800 dark:text-lime-200',
+                'bg-green-200 dark:bg-green-900/60 text-green-800 dark:text-green-200',
+                'bg-emerald-200 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200',
+                'bg-teal-200 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200',
+                'bg-cyan-200 dark:bg-cyan-900/60 text-cyan-800 dark:text-cyan-200',
+                'bg-sky-200 dark:bg-sky-900/60 text-sky-800 dark:text-sky-200'
+            ];
+            let playerCount = 0;
+
+            // --- ELEMENTOS DEL DOM ---
+            const addPlayerBtn = document.getElementById('add-player-btn');
+            const calculateBtn = document.getElementById('calculate-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const playersContainer = document.getElementById('players-container');
+            const errorContainer = document.getElementById('error-container');
+            const resultsContainer = document.getElementById('results-container');
+            const resultsList = document.getElementById('results-list');
+
+            // --- FUNCIONES DE LOCALSTORAGE ---
+            
+            function savePlayersToStorage() {
+                const playerCards = document.querySelectorAll('.player-card');
+                const playerNames = Array.from(playerCards).map(card => {
+                    return card.querySelector('.player-name').value.trim();
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(playerNames));
+            }
+
+            function loadPlayersFromStorage() {
+                const savedPlayers = localStorage.getItem(STORAGE_KEY);
+                if (savedPlayers) {
+                    const playerNames = JSON.parse(savedPlayers);
+                    if (playerNames.length > 0) {
+                        playerNames.forEach(name => addPlayer(name));
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // --- FUNCIONES PRINCIPALES ---
+
+            function validateAllCardCounts() {
+                const playerCards = document.querySelectorAll('.player-card');
+                if (playerCards.length === 0) return null;
+
+                const totalCardCounts = {};
+                for (let i = 1; i <= 10; i++) totalCardCounts[i] = 0;
+
+                for (const card of playerCards) {
+                    for (let i = 1; i <= 10; i++) {
+                        const input = card.querySelector(`input[id$="-card${i}"]`);
+                        const count = parseInt(input.value) || 0;
+                        if (count < 0) return `El número de cartas no puede ser negativo.`;
+                        totalCardCounts[i] += count;
+                    }
+                }
+
+                for (let i = 1; i <= 10; i++) {
+                    if (totalCardCounts[i] > MAX_CARDS[i]) {
+                        return `Error: Se han introducido ${totalCardCounts[i]} cartas de valor '${i}', pero el máximo es ${MAX_CARDS[i]}.`;
+                    }
+                }
+                return null;
+            }
+            
+            function handleCardInput() {
+                const errorMessage = validateAllCardCounts();
+                errorContainer.textContent = errorMessage || '';
+            }
+
+            /**
+             * Crea y añade el formulario para un nuevo jugador.
+             * @param {string} name - Nombre predefinido para el jugador (opcional).
+             */
+            function addPlayer(name = '') {
+                playerCount++;
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player-card bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg fade-in';
+                playerDiv.id = `player-${playerCount}`;
+
+                let cardInputsHTML = '';
+                for (let i = 1; i <= 10; i++) {
+                    const colorClass = CARD_COLORS[i - 1]; // Los arrays son 0-indexed
+                    cardInputsHTML += `
+                        <div class="text-center rounded-lg shadow-md overflow-hidden">
+                            <label for="p${playerCount}-card${i}" class="block text-sm font-bold ${colorClass} py-1 transition-colors">${i}</label>
+                            <div class="relative flex items-stretch w-full">
+                                <button type="button" class="decrement-btn bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-bold p-2 transition-colors flex-shrink-0">-</button>
+                                <input type="number" id="p${playerCount}-card${i}" min="0" max="${MAX_CARDS[i]}" class="card-input w-full p-2 text-center bg-gray-50 dark:bg-gray-700 border-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10" placeholder="0">
+                                <button type="button" class="increment-btn bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-bold p-2 transition-colors flex-shrink-0">+</button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                playerDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <input type="text" value="${name}" placeholder="Nombre del Jugador ${playerCount}" class="player-name text-xl font-semibold bg-transparent border-b-2 border-gray-300 dark:border-gray-600 focus:outline-none focus:border-indigo-500 w-full">
+                        <button class="remove-player-btn text-red-500 hover:text-red-700 ml-4" title="Eliminar jugador">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Introduce el número de cartas para cada valor:</p>
+                    <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-3 md:gap-4">
+                        ${cardInputsHTML}
+                    </div>
+                `;
+
+                playersContainer.appendChild(playerDiv);
+
+                // --- Eventos para este nuevo jugador ---
+                playerDiv.querySelector('.player-name').addEventListener('input', savePlayersToStorage);
+                playerDiv.querySelectorAll('.card-input').forEach(input => input.addEventListener('input', handleCardInput));
+                
+                playerDiv.querySelectorAll('.increment-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const input = e.target.previousElementSibling;
+                        let value = parseInt(input.value) || 0;
+                        const max = parseInt(input.max);
+                        if (value < max) {
+                            input.value = value + 1;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    });
+                });
+
+                playerDiv.querySelectorAll('.decrement-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const input = e.target.nextElementSibling;
+                        let value = parseInt(input.value) || 0;
+                        if (value > 0) {
+                            input.value = value - 1;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    });
+                });
+
+                playerDiv.querySelector('.remove-player-btn').addEventListener('click', () => {
+                    playerDiv.remove();
+                    handleCardInput();
+                    savePlayersToStorage();
+                });
+            }
+
+            function calculateScores() {
+                resultsList.innerHTML = '';
+                resultsContainer.classList.add('hidden');
+                
+                const errorMessage = validateAllCardCounts();
+                errorContainer.textContent = errorMessage || '';
+                if (errorMessage) return;
+
+                const playerCards = document.querySelectorAll('.player-card');
+                if (playerCards.length === 0) {
+                    errorContainer.textContent = 'Añade al menos un jugador para calcular.';
+                    return;
+                }
+                
+                savePlayersToStorage();
+
+                const scores = [];
+                playerCards.forEach((card, index) => {
+                    const nameInput = card.querySelector('.player-name');
+                    const name = nameInput.value.trim() || `Jugador ${index + 1}`;
+                    let totalScore = 0;
+                    for (let i = 1; i <= 10; i++) {
+                        const input = card.querySelector(`input[id$="-card${i}"]`);
+                        const count = parseInt(input.value) || 0;
+                        totalScore += count * i;
+                    }
+                    scores.push({ name, score: totalScore });
+                });
+
+                scores.sort((a, b) => b.score - a.score);
+
+                scores.forEach((player, index) => {
+                    const rankItem = document.createElement('li');
+                    const medal = ['🥇', '🥈', '🥉'][index] || `${index + 1}.`;
+                    rankItem.className = 'flex items-center justify-between p-3 rounded-lg fade-in';
+                    rankItem.style.animationDelay = `${index * 100}ms`;
+                    
+                    if (index < 3) {
+                       rankItem.classList.add(
+                           index === 0 ? 'bg-yellow-100 dark:bg-yellow-900/50' :
+                           index === 1 ? 'bg-gray-200 dark:bg-gray-700/50' :
+                           'bg-orange-100 dark:bg-orange-900/50'
+                       );
+                    }
+
+                    rankItem.innerHTML = `
+                        <div class="flex items-center">
+                            <span class="text-2xl w-10 text-center">${medal}</span>
+                            <span class="font-semibold text-lg ml-2 md:ml-4">${player.name}</span>
+                        </div>
+                        <span class="font-bold text-xl text-indigo-600 dark:text-indigo-400">${player.score} puntos</span>
+                    `;
+                    resultsList.appendChild(rankItem);
+                });
+
+                resultsContainer.classList.remove('hidden');
+                resultsContainer.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            function resetGame() {
+                localStorage.removeItem(STORAGE_KEY);
+                playersContainer.innerHTML = '';
+                errorContainer.textContent = '';
+                resultsContainer.classList.add('hidden');
+                resultsList.innerHTML = '';
+                playerCount = 0;
+                addPlayer();
+                addPlayer();
+                savePlayersToStorage();
+            }
+
+            // --- EVENT LISTENERS ---
+            addPlayerBtn.addEventListener('click', () => {
+                addPlayer();
+                savePlayersToStorage();
+            });
+            calculateBtn.addEventListener('click', calculateScores);
+            resetBtn.addEventListener('click', resetGame);
+
+            // --- INICIALIZACIÓN ---
+            const playersLoaded = loadPlayersFromStorage();
+            if (!playersLoaded) {
+                addPlayer();
+                addPlayer();
+            }
+        });
+    </script>
+</body>
+</html>
